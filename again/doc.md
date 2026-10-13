@@ -1,216 +1,166 @@
-# what's chainesrools
-Chainesrools is a little framework to create NN with ease. It name is 
-inspired by the _chaines rule_, which is used to compute the gradiens 
-of NN weights.
+# What is chainesrools?
+**chainesrools** is a lightweight framework designed to build neural networks with ease. Its name is inspired by the **chain rule**, which is used to compute the gradients of neural network weights.
 
-You don't need to install any things else to use it. It has a few apis, so 
-understand each of thems will be quick.
+You do not need to install any external dependencies to use it. It features a minimalist API, making it quick and easy to understand.
 
+---
 
-# API 1 : Scalar
-The first thing you should know, is _Scalar objects_, which represente 
-numbers (float), wrapping into class that enable it to be update by others 
-scalars. Each scalar has  a list named 'children', this list stores 
-operators. The operand is stored in 'op' attribute, these datas, help to 
-update others scalars when this changed. 
+# API 1: Scalar
+The core building block of the framework is the `Scalar` object. It represents a single number (float) wrapped in a class that enables automatic differentiation. 
 
-"""
- >>> a = Scalar(data=23.9)  # you can also write Scalar(23.9) 
- >>> print(a.children)
- ''
-"""
+Each scalar tracks its lineage through a list called `children`, which stores the sub-scalars involved in the operation. The specific operation type is stored in the `op` attribute. This data helps propagate gradients and update other scalars when changes occur.
 
-the operand is also set into the scalar:
+```python
+>>> from chainesrools import Scalar
+>>> a = Scalar(data=23.9)  # You can also write Scalar(23.9)
+>>> print(a.children)
+[]
+```
 
-"""
- >>> b = a + Scalar(23) 
- >>> print(b.op)
- '+'
-"""
+The operation (`op`) is automatically set when creating new scalars through operations:
 
-Scalar object support all arithmetic operations, and someone can add a scalar
-and a number together (the returning value, will be a scalar).
+```python
+>>> b = a + Scalar(23)
+>>> print(b.op)
+'+'
+```
 
-"""
- >>> c = b + 4  # you can also write Scalar(23.9) 
- >>> print(c.data)
- ''
-"""
+`Scalar` objects support all basic arithmetic operations. You can also perform operations combining a `Scalar` and a regular Python number (the returning value will automatically be wrapped into a `Scalar`).
 
-Scalar object hold a grad attribute that's use to update the value of the data
-by defaiult it set to 0.0
+```python
+>>> c = b + 4
+>>> print(c.data)
+50.9
+```
 
-"""
- >>> a = Scalar(data=23.9)  # you can also write Scalar(23.9) 
- >>> a.grad
- 0.0
- 
-"""
+Each `Scalar` object holds a `grad` attribute used to accumulate gradients. By default, it is initialized to `0.0`.
 
-We can update scalars with the _backward method. this will only update the 
-children data values and will not affect the scalar itself.
+```python
+>>> a = Scalar(data=23.9)
+>>> a.grad
+0.0
+```
 
-"""
- >>> values = [item.data for item in c.children]
- >>> "(before updating) the value of data ", values
+You can update local gradients manually using the internal `_backward()` method. This only updates the immediate children's gradient values and does not propagate further back or affect the scalar itself.
 
- >>> c.grad = 1.0 # by default the value is 0.0, you should set it to 1.0
- >>>              # before calling _backward method.
- 
- >>> c._backward()  # you can also write Scalar(23.9) 
- >>> values = [item.data for item in c.children]
- >>> "(after updating) the value of data ", values
- 
-"""
-In the previous case, only b and another scalar is update. Can we update to
-the children of b and the last scalar ? You may use a loop to achive that:  
+```python
+>>> # Set the seed gradient before calling _backward
+>>> c.grad = 1.0 
+>>> c._backward()
+```
 
-"""
+In the previous case, only the direct children of `c` are updated. To update the entire computational graph down to the very first inputs, you would normally need a nested loop:
 
- >>> # bloc
- >>> for item in c.children:
- ...  for sub in item.children:
- ...    sub._backward()
- ...  sub._backward()
+```python
+>>> # Manual deep update block
+>>> for item in c.children:
+...     for sub in item.children:
+...         sub._backward()
+...     item._backward()
+```
 
-""" 
+While this works for simple expressions, it becomes impossible to manage manually for complex networks where the exact architecture is unknown. This automation is handled by the `Scalar.backward()` method. This method automatically builds a **topological graph** of all connected nodes and calls `_backward()` in the correct sequential order to calculate all gradients.
 
-
-Of course, this work for the scalar c, but how to call the _backward method
-when we aren't define the scalar or don't know how is defined ? We should
-also call the '# bloc' on the subitem call 'sub'. That's task is handled by
-_Scalar.backward_ method. The method will build a topological graph of the 
-children of this scalar and then call the _backward method to update the 
-float value.
-
+---
 
 # API 2: Neuron
+To start building networks, a built-in `Neuron` class is provided. All weights and biases inside a `Neuron` instance are stored as `Scalar` objects. 
 
-To start experimentation, a Neuron class is provided. so you don't need to 
-create a new class for that.
-All weights of the Neuron instance are scalars objects. The class come with 
-it train method, the constructor expected the number of input 
-(not inputs itselves). To feed it input, call the instance as a callable
-object where the argument is input:
+The constructor expects the **number of inputs** (not the inputs themselves). To feed data into the neuron, call the instance as a callable object, passing the input vector as an argument:
 
+```python
+>>> from chainesrools import Neuron  
+>>> from random import uniform
+>>> X = [uniform(-1, 1) for _ in range(100)]
+>>> n = Neuron(100)
+>>> n(X)
+# Returns a Scalar object representing the output activation
+```
 
-"""
+The `Neuron.train(X, target)` method expects an input vector `X` and a `target` value (which should be bounded between -1 and 1). For more details about input data requirements, please read the [Data Input](#data-input) section below.
 
- >>> from chainesrools import Neuron  
- >>> from random import uniform
- >>> X = [uniform(-1, 1) for _ in range(100)]
- >>> n = Neuron(100)
- >>> n(X)
- ''
- >>> n.train(X, target=-1)
+To extract the internal parameters, call the `.parameters()` method, which returns a list of `Scalar` objects:
 
- 
-"""
+```python
+>>> params = n.parameters()
+```
 
-The chainesrools.Neuron.train method, expected unless the X value and the
-target number (which is in the bounds of -1 and 1). For more details, about
-inputs datas, please read here.
-To get the parameters, call the  .parameters() method, which return a list 
-of Scalars [link to scalar]. 
-You can also get the same result by doing:
- 
- """
- >>> n = Neuron(12)
- >>> n.ws + [n.b]  
+You can achieve the exact same result manually by concatenating the weights list and the bias:
+```python
+>>> n = Neuron(12)
+>>> all_params = n.ws + [n.b]  
+```
 
- """
-
-To more informations about this chainesrools.Neuron please read here
-
+---
 
 # API 3: Layer
-The Layer, creates multiple neurons. the number of single neuron input is 
-give into the __init__ method and stores into nin argumen, the number of 
-expected neurons is fed into neu argument of the constructor.
+The `Layer` class represents a collection of multiple neurons running in parallel. 
+* `nin`: The number of inputs feeding into a single neuron.
+* `neu`: The total number of neurons present in this layer.
 
+```python
+>>> from chainesrools import Layer
+>>> nin = 12
+>>> X = [[uniform(-1, 1) for _ in range(nin)] for _ in range(100)]
+>>> first_layer = Layer(nin, 42)
+>>> first_layer(X)  
+```
 
- """
- >>> nin = 12
- >>> X = [ [uniform(-1, 1) for _ in range(nin)] for _ in range(100)]
- >>> first_layer = Layer(nin, 42)
- >>> first_layer(X)  
+Calling `.train()` or executing the instance as a callable on a `Layer` object will automatically forward the operation and trigger the training mechanism across every individual neuron it contains.
 
- """
+---
 
- You can also call .train() on a Layer object. As you call .train, this object
- will can the .train method of each neuron. Same when you call Layer instance
- as a callable.
- 
- 
-There no more informations about this class, but take a look there (link).
+# API 4: MLP (Multi-Layer Perceptron)
+The `MLP` class connects multiple layers together. Just like the `Layer` class, it is fully callable and includes a `.train()` method.
 
-# API 4: MLP
+The constructor expects:
+1. An integer representing the number of input features for the **first layer**.
+2. A list containing the number of neurons for each sequential layer \(k\).
 
-MLP come with many layers connected. As Layer class, is has a train method.
-It's a callable. The constructor expects a interger: the numbers of inputs
-data of the _first layer_ and a list, which's stores the number of neurons 
-of layer k (k is the index of the number in the list).
+```python
+>>> from chainesrools import MLP
+>>> nin = 12
+>>> X = [[uniform(-1, 1) for _ in range(nin)] for _ in range(100)]
+>>> NET = MLP(nin, [12, 43, 5, 2, 1])
+>>> NET(X)  
+```
 
- """
- >>> nin = 12
- >>> X = [ [uniform(-1, 1) for _ in range(nin)] for _ in range(100)]
- >>> NET = MLP(nin, [12, 43, 5, 2, 1])
- >>> NET(X)  
+---
 
- """
+# API 5: Use Cases & Demos
+If you want to see a concrete application of this framework, you can run the built-in demos directly from your terminal:
 
-fore more details please read here...
+```bash
+python -m chainesrools test # You can also try vnet or lessnet
+```
 
+To see information and available configurations for a specific demo, add the `--help` flag after its name:
 
+```bash
+python -m chainesrools vnet --help 
+```
 
-# API 5: usecase
+---
 
-If you want see the real application of this framework, please have a look:
+# Data Input Requirements
 
-"""
- >>> python -m chainesrools test # you can also try vnet or lessnet
+All input features and targets **must be normalized within the range of [-1, 1]**. 
 
-"""
+### Why is this necessary?
+The underlying activation function used by default in this framework is the **hyperbolic tangent (tanh)**. 
 
-if you want see information about each demo, add the help flag after the demo
-name
+The `tanh` function output strictly ranges from `-1` to `1`. When `loss.backward()` is applied, the model adjusts its weights to try to match your target. If your target is outside this boundary, the network will never converge.
 
-"""
- >>> python -m chainesrools vnet --help 
+For example, if your target is set to `43` and the maximum possible output of the model is `1` (due to `tanh`), the network will compute a high error, and gradients will keep updating indefinitely trying to solve this equation:
+\[\text{loss} = 0 \iff (\tanh(n) - 43)^2 = 0 \iff \tanh(n) = 43\]
 
-"""
+This mathematical statement is impossible to satisfy because `tanh` stops at `1`. Therefore, all data fed into the neurons must strictly range from `-1` to `1`.
 
+*Note:* The framework also supports the `sigmoid` activation function. If you need a custom activation function, feel free to implement it and contribute!
 
-# DATA INPUT:
+To visualize any network architecture you have built, you can call the `.show()` method on any `Layer`, `Neuron`, or `MLP` object. See the [NNplots](#nnplots) section for more details.
 
- All data should be in range 1 (from -1 to 1). It's same thing with the 
- target value passed in the .train method. Why ? Because the underline 
- activation function use is tanh.
-
- tanh start at -1 and end 1. So when the loss.backward is applied, to reach
- the target value, the modal will not find the right weight for the problem
- if target is not convert into a value from -1 to 1.
-
- Of course, assume that the target is 43 and the output of the modal is 
- 0.5428899 (which is bounce in -1 and 1), the loss.backward() method is 
- called and the error is different to 0, so the weights will be update too
- to give the tanh function (used to compute the activation of modal) a 
- number n,  so that :
-   loss = 0  eq (tanh(n) - target)**2 = 0
-             eq tanh(n) = target = 43
-
- the last statement is impossible to achive.  Because tanh, can reach the 
- number 43 (It stop at 1! ) Any data fed into neurons should be from -1 to 
- 1.
-
- there's another function  you can use to compute the activation, the 
- __sigmoid__ . If you want another function, feel free to add it.
-
- To see a network, that you created, call the .show method on object.
- Object should be Layer, Neuron or MLP. Read NNplots for more informations.   
-
+---
 
 # NNplots
-
-NNplots display the neurons network that you created. It's use graphizx 
-under the wood.   
+The `NNplots` module provides visual representations of your created neural networks. It uses **Graphviz** under the hood to generate graphs.
