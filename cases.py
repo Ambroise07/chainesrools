@@ -1,7 +1,8 @@
-from  neurons import Neuron, MLP
+from  __init__ import *
 from random import uniform, randint
 from pprint import pp as print
 import math
+
 
 def print_(e):
   pass
@@ -13,6 +14,7 @@ n.train(target=-1, x=X,  callback=print_)
 
 print(f"output: {n(X)}  ---  target is -1")
 """
+
 
 def sin():
   """ guess sinus values with a neuron """
