@@ -8,7 +8,14 @@
  
 """
 
-from engine import Scalar
+try:
+    # Cas 1 : Utilisé lorsque le projet est lancé depuis la racine (ex: python cases.py)
+    from core.engine import Scalar
+except ModuleNotFoundError:
+    # Cas 2 : Utilisé si vous lancez le fichier neurons.py directement tout seul
+    from engine import Scalar
+
+
 from random import uniform
 from collections.abc import Callable 
 # should import graphizx here
@@ -209,25 +216,44 @@ class MLP:
     self.layers = [Layer(size[i], size[i+1]) for i in range(len(nlayers))]
     self.__nin = nin
 
-  def __call__(self, x:list):
+
+  def __call__(self, x: list):
   
     if not (isinstance(x, list)):
       raise TypeError("x should be a list.")
 
-    
-    if not  all([isinstance(xi, list) and len(xi) == self.__nin for xi in x]):
+    if not all([isinstance(xi, list) and len(xi) == self.__nin for xi in x]):
       raise ValueError("""
       Expected inputs should be contains lists as item.
       read docs for more details about inputs. 
       """)
        
-    outs = [layer(x) for layer in self.layers]
-    return outs[0] if len(outs) == 1 else outs
+    out = x
+    for layer in self.layers:
+        out = layer(out)
+        
+    return out
 
-  def train(self, **params):
-    """ train the MLP """
-    for l in self.layers:
-      l.train()
+
+
+
+  # Dans core/neurons.py (Tout en bas, dans la classe MLP)
+  def train(self, x: list, target: list, callback=None, lr: float = .001, niter: int = 1):
+    """
+    Trains the entire MLP by iterating through each sample 
+    and passing individual examples down to the layers.
+    """
+    if not isinstance(x, list) or not isinstance(target, list):
+        raise TypeError("x and target must both be lists containing your dataset samples.")
+        
+    # On boucle sur le nombre d'itérations globales (epochs) de l'entraînement
+    for _epoch in range(niter):
+        # On fait défiler les images une par une avec leur cible associée
+        for xi, yi in zip(x, target):
+            # On transmet l'échantillon individuel aux couches
+            for l in self.layers:
+                l.train(x=xi, target=yi, callback=callback, lr=lr, niter=1)
+
 
 
   def show(self):
