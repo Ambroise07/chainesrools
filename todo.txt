@@ -1,0 +1,4 @@
+
+# how update gradiens in case of more than two node in a operations:
+  c = a * b .....................................................ok 
+  d = c * a * b ................................................bad
